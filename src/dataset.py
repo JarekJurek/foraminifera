@@ -1,10 +1,9 @@
 import os
-import cv2
 import pandas as pd
 from tifffile import imread
-import sys
 import matplotlib.pyplot as plt
 from tqdm import tqdm
+import numpy as np
 import torch
 
 
@@ -88,6 +87,7 @@ class ForamsDataset:
         Return the labelled image and its label.
         """
         volume = self.data[idx]['volume']
+        volume = volume.astype(np.float32) / 255.0
         label = self.data[idx]['label']
         
         # Apply the transformations to the volume

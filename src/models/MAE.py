@@ -345,7 +345,7 @@ class MAE_3D_Lightning(pl.LightningModule):
         """
         Helper function for common logic in training, validation, and test steps.
         """
-        pixel_values = batch
+        pixel_values, labels = batch
        
         # Pass pixel values to the model. It handles masking and reconstruction internally.
         # The model outputs include the loss calculated *only* on the masked patches.
