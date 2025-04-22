@@ -1,5 +1,6 @@
 from src.models.MAE import MAE_3D_Lightning
 from src.dataset import ForamsDataset
+from src.utils import *
 
 import torchvision.transforms as transforms
 import pytorch_lightning as pl
@@ -9,16 +10,13 @@ import wandb
 from pytorch_lightning.loggers import WandbLogger
 import sys
 
-
-TRAINED_MODELS_DIR = "trained_models/"
 if not os.path.exists(TRAINED_MODELS_DIR):
     os.makedirs(TRAINED_MODELS_DIR)
     print(f"Created directory: {TRAINED_MODELS_DIR}")
     
-DATA_PATH = "data/"
 
 TRAIN_SPLIT = 0.8
-NUM_SAMPLES = 800
+NUM_SAMPLES = None
 NUM_EPOCHS = 100
 EARLY_STOPPING_PATIENCE = 6
 
@@ -63,7 +61,7 @@ def train(model_pl, train_dataloader, val_dataloader=None):
 
     
     # Test the model
-    save_path = f"{TRAINED_MODELS_DIR}/mae.pth"
+    save_path = f"{TRAINED_MODELS_DIR}/mae02.pth"
 
     # Save the model
     print(f"Saving the model to {save_path}")

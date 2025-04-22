@@ -1,6 +1,14 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
+import torch
+import os
+
+
+TRAINED_MODELS_DIR = "trained_models/"
+DATA_PATH = "data/"
+FIGURES_DIR = "figures/"
+FEATURES_PATH = '../features/'
 
 def plot_volume(volume, opacity=0.5, view='orthogonal'):
     # Create coordinate arrays
@@ -126,3 +134,43 @@ def plot_histogram(volume):
     plt.ylabel('Frequency')
     plt.grid(axis='y', alpha=0.75)
     plt.show()
+    
+    
+def load_model(state_dict_path, model_pl):
+    """
+    Load the pytorch lightning model from the given path.
+    :param model_path: path to the model file
+    :return: the loaded model
+    """
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    print(f"Loading model on device: {device}")
+    
+    # Check if the model path exists
+    if not os.path.exists(state_dict_path):
+        raise FileNotFoundError(f"Model file not found: {state_dict_path}")
+    
+    # Load the weights
+    state_dict = torch.load(state_dict_path, map_location=device)
+    # If you saved the inner nn.Module:
+    model_pl.model.load_state_dict(state_dict)
+    
+    model_pl.eval()
+    return model_pl
+
+def load_checkpoint(model_class, checkpoint_path):
+    """
+    Load the checkpoint from the given path.
+    :param checkpoint_path: path to the checkpoint file
+    :return: the loaded checkpoint
+    """
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+    # correct: call on the class
+    model = model_class.load_from_checkpoint(
+        checkpoint_path,
+        map_location=device      # or "cpu", or a torch.device
+    )
+
+    model.eval()                # inference mode
+    model.to(device)            # move to GPU if you like
+    return model

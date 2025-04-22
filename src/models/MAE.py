@@ -67,8 +67,8 @@ class PatchEmbed(nn.Module):
         x: (B, C, H, W, D) -- (batch size, channels, height, width, depth)
         x: (B, L, D) -- (batch size, number of patches, embedding dimension)
         """
-        B, C, H, W, D = x.shape
-        x = self.proj(x).flatten(2).transpose(1, 2)
+        x = self.proj(x)                        # (B,embed,D',H',W')
+        x = x.flatten(2).transpose(1, 2)        # (B, L, embed)
         return x
 # ----------------------------------------------------------------------------------------
 
@@ -318,6 +318,35 @@ class MaskedAutoencoderViT_3D(nn.Module):
         loss = self.forward_loss(imgs, pred, mask)
         return loss, pred, mask
 
+    @torch.no_grad()
+    def encode(self, imgs: torch.Tensor) -> torch.Tensor:
+        """
+        Deterministic encoder forward pass **without** any masking or shuffling.
+
+        Args
+        ----
+        imgs : (B, C, D, H, W)  input volume.
+
+        Returns
+        -------
+        z : (B, 1+L, D_e)       latent sequence; z[:,0] is the CLS token.
+        """
+        # patch -> embed
+        x = self.patch_embed(imgs)                          # (B, L, D_e)
+
+        # add positional enc. (no CLS slot)
+        x = x + self.pos_embed[:, 1:, :]
+
+        # prepend CLS token
+        cls_tok = self.cls_token + self.pos_embed[:, :1, :] # (1, 1, D_e)
+        x = torch.cat([cls_tok.expand(x.size(0), -1, -1),   # (B, 1, D_e)
+                       x], dim=1)                           # (B, 1+L, D_e)
+
+        # transformer encoder
+        for blk in self.blocks:
+            x = blk(x)
+        x = self.norm(x)
+        return x                                            # (B, 1+L, D_e)
 
 
 class MAE_3D_Lightning(pl.LightningModule):
@@ -340,6 +369,27 @@ class MAE_3D_Lightning(pl.LightningModule):
         
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
+        
+    @torch.no_grad()
+    def extract_features(self, volumes: torch.Tensor,
+                         pool: str = "cls") -> torch.Tensor:
+        """
+        Args
+        ----
+        volumes : (B, C, D, H, W)
+        pool    : "cls" | "mean"  how to obtain a single feature vector.
+
+        Returns
+        -------
+        feats   : (B, D_e) if pooled, else (B, 1+L, D_e)
+        """
+        z = self.model.encode(volumes)          # (B, 1+L, D_e)
+        if pool == "cls":
+            return z[:, 0]                      # (B, D_e)
+        elif pool == "mean":
+            return z.mean(1)                    # (B, D_e)
+        else:
+            return z                            # full sequence
     
     def _shared_step(self, batch, batch_idx, step_name):
         """
@@ -399,7 +449,7 @@ class MAE_3D_Lightning(pl.LightningModule):
         loss, predictions, masks = self.model(volumes, mask_ratio=mask_ratio)
         return predictions, masks
     
-    def plot_inference(self, volumes, reconstructed_patches, masks, save_path=None):
+    def plot_inference(self, volumes, reconstructed_patches, masks, save_path=None, cmap='gray'):
         """
         Plots the original image, reconstructed patches, and the mask.
         :param image: Original image tensor of shape (num_channels, height, width).
@@ -415,26 +465,33 @@ class MAE_3D_Lightning(pl.LightningModule):
         # Convert tensors to numpy arrays for plotting
         volumes_np = volumes.cpu().numpy()
         reconstructed_volumes_np = reconstructed_volumes.cpu().numpy()
-        print(f"Reconstructed volumes shape: {reconstructed_volumes.shape}")
+        
+        masks_np = masks.cpu().numpy()
         
         num_volumes = volumes_np.shape[0]
-        fig, axes = plt.subplots(num_volumes, 2, figsize=(10, 5 * num_volumes))
+        fig, axes = plt.subplots(num_volumes, 3, figsize=(10, 5 * num_volumes))
         if num_volumes == 1:
             axes = np.expand_dims(axes, axis=0)
             
         for i in range(num_volumes):
             volume = volumes_np[i, 0]  # Get the first channel
             reconstructed_volume = reconstructed_volumes_np[i, 0]  # Get the first channel
-            print(f"Volume shape: {volume.shape}")
+            mask = masks_np[i]
+            # Reshape the mask to the original volume shape
+            mask = mask.reshape(self.model.num_patches[0], self.model.num_patches[1], self.model.num_patches[2])
             
             slice_idx = volume.shape[0] // 2
-            axes[i, 0].imshow(volume[slice_idx], cmap='gray')
+            mask_idx = mask.shape[0] // 2
+            
+            axes[i, 0].imshow(volume[slice_idx], cmap=cmap)
             axes[i, 0].set_title('Original Volume')
             axes[i, 0].axis('off')
-            axes[i, 1].imshow(reconstructed_volume[slice_idx], cmap='gray')
+            axes[i, 1].imshow(reconstructed_volume[slice_idx], cmap=cmap)
             axes[i, 1].set_title('Reconstructed Volume')
             axes[i, 1].axis('off')
-        plt.suptitle('Original Volume, Reconstructed Volume, and Mask')
+            axes[i, 2].imshow(mask[mask_idx], cmap='gray')
+            axes[i, 2].set_title('Mask')
+            axes[i, 2].axis('off')
         
         plt.tight_layout()
         if save_path:

@@ -2,3 +2,6 @@ data/
 figures/
 features/
 __pycache__/
+wandb/
+trained_models/
+foramifiera-self-supervised/
