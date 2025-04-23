@@ -1,4 +1,4 @@
-from src.models.MAE import MAE_3D_Lightning
+# from src.models.MAE import MAE_3D_Lightning
 from src.models.resnet_3d import Resnet3D
 from src.dataset import ForamsDataset
 
@@ -21,10 +21,10 @@ DATA_PATH = "/zhome/a2/c/213547/group_Anhinga/forams_classification/data"
 TRAIN_SPLIT = 0.8
 NUM_SAMPLES = 800
 NUM_EPOCHS = 100
-EARLY_STOPPING_PATIENCE = 6
+EARLY_STOPPING_PATIENCE = 6 # 90603e7b8caa45fca6a820844b7eb700a72aa61a
 
 LEARNING_RATE = 1e-4
-BATCH_SIZE = 8
+BATCH_SIZE = 2
 
 
 def train(model_pl, train_dataloader, val_dataloader=None, model_name='network'):
@@ -41,7 +41,7 @@ def train(model_pl, train_dataloader, val_dataloader=None, model_name='network')
     # Initialize wandb
     wandb_logger = WandbLogger(
         project="foramifiera-self-supervised",
-        name=f"mae_{wandb.util.generate_id()}",  # Create a unique run name
+        name=f"resnet_3d_{wandb.util.generate_id()}",  # Create a unique run name
         log_model=True  # This will log your model checkpoints
     )
     # Optional: Log hyperparameters
@@ -89,7 +89,7 @@ if __name__ == "__main__":
     dataset = ForamsDataset(
         csv_labels_path=os.path.join(DATA_PATH, "labelled.csv"), 
         labelled_data_path=os.path.join(DATA_PATH, "volumes", "volumes", "labelled"),
-        unlabeled_data_path=os.path.join(DATA_PATH, "volumes", "volumes", "unlabelled"),
+        # unlabeled_data_path=os.path.join(DATA_PATH, "volumes", "volumes", "unlabelled"),
         volume_transforms=volume_transforms,
         max_num_samples=NUM_SAMPLES
     )
@@ -110,7 +110,13 @@ if __name__ == "__main__":
         val_dataset, batch_size=BATCH_SIZE, shuffle=False)
 
     # Initialize the model
-    model_pl = Resnet3D(num_classes=2, pretrained=False, learning_rate=LEARNING_RATE)
+    model_pl = Resnet3D(num_classes=14, pretrained=False, learning_rate=LEARNING_RATE)
 
+    # all_labels = [label for _, label, _ in train_dataset]
+    # print("Unique labels in training set:", set(all_labels))
+    # print(f"Min label: {min(all_labels)}, Max label: {max(all_labels)}")
+    # print(f"Number of classes expected by model: {model_pl.num_classes}")
+
+    # exit(1)
 
     train(model_pl, train_loader, val_loader, model_name='resnet_normal')

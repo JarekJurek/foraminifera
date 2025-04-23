@@ -97,7 +97,7 @@ class ForamsDataset:
         # Convert the label to a tensor
         label = torch.tensor(label, dtype=torch.long)
         
-        return volume, label
+        return volume, label, idx
     
     
     def plot_sample_slices(self, idx, idx_x=None, idx_y=None, idx_z=None, cmap='gray', save_path=None):
