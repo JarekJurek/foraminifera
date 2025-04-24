@@ -42,8 +42,8 @@ def extract_features(loader: DataLoader, model):
 
 
 
-labelled_path = os.path.join(DATA_PATH, 'volumes/volumes/labelled')
-unlabelled_path = os.path.join(DATA_PATH, 'volumes/volumes/unlabelled')
+labelled_path = os.path.join(DATA_PATH, 'volumes/labelled')
+unlabelled_path = os.path.join(DATA_PATH, 'volumes/unlabelled')
 labels_csv_path = os.path.join(DATA_PATH, 'labelled.csv')
 
 # Convert to tensor and add a channel dimension
@@ -57,7 +57,7 @@ dataset = ForamsDataset(
     csv_labels_path=labels_csv_path, labelled_data_path=labelled_path, 
     volume_transforms=volume_transforms, 
     unlabeled_data_path=unlabelled_path,
-    max_num_samples=400
+    max_num_samples=None
 )
 
 print(f"Number of samples in dataset: {len(dataset)}")
@@ -68,17 +68,16 @@ dataloader = DataLoader(dataset, batch_size=4, shuffle=True)
 # 2. Extract features using ResNet3D
 model_pl = load_checkpoint(
     MAE_3D_Lightning, 
-    "foramifiera-self-supervised/e3v2l2ga/checkpoints/epoch=99-step=184300.ckpt")
+    os.path.join(TRAINED_MODELS_PATH, "epoch=99-step=184300.ckpt"), 
+    device)
 
 volume_features, labels = extract_features(dataloader, model_pl)
 print(f"Extracted features shape: {volume_features.shape}")
 print(f"Labels shape: {labels.shape}")
 
 # Save the features and labels
-# np.save(os.path.join(FEATURES_PATH, 'volume_features_100.npy'), volume_features)
-# np.save(os.path.join(FEATURES_PATH, 'labels_100.npy'), labels)
-np.save('volume_features_27.npy', volume_features)
-np.save('labels_27.npy', labels)
+np.save(os.path.join(FEATURES_PATH, 'volume_features.npy'), volume_features)
+np.save(os.path.join(FEATURES_PATH, 'labels.npy'), labels)
 
 print(f"Features and labels saved to {FEATURES_PATH}")
 print(os.listdir(FEATURES_PATH))

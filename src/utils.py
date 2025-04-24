@@ -1,14 +1,16 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
-import torch
 import os
 
 
-TRAINED_MODELS_DIR = "trained_models/"
-DATA_PATH = "data/"
-FIGURES_DIR = "figures/"
-FEATURES_PATH = '../features/'
+TRAINED_MODELS_PATH = "/dtu/3d-imaging-center/courses/02510/groups/group_Anhinga/forams_classification/trained_models/"
+DATA_PATH = "/dtu/3d-imaging-center/courses/02510/data/Foraminifera/kaggle_data/"
+# FIGURES_DIR = "figures/"
+FEATURES_PATH = "/dtu/3d-imaging-center/courses/02510/groups/group_Anhinga/forams_classification/features/"
+
+print()
+
 
 def plot_volume(volume, opacity=0.5, view='orthogonal'):
     # Create coordinate arrays
@@ -136,14 +138,12 @@ def plot_histogram(volume):
     plt.show()
     
     
-def load_model(state_dict_path, model_pl):
+def load_model(state_dict_path, model_pl, device):
     """
     Load the pytorch lightning model from the given path.
     :param model_path: path to the model file
     :return: the loaded model
     """
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    print(f"Loading model on device: {device}")
     
     # Check if the model path exists
     if not os.path.exists(state_dict_path):
@@ -157,13 +157,12 @@ def load_model(state_dict_path, model_pl):
     model_pl.eval()
     return model_pl
 
-def load_checkpoint(model_class, checkpoint_path):
+def load_checkpoint(model_class, checkpoint_path, device):
     """
     Load the checkpoint from the given path.
     :param checkpoint_path: path to the checkpoint file
     :return: the loaded checkpoint
     """
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     # correct: call on the class
     model = model_class.load_from_checkpoint(
