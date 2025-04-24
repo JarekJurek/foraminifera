@@ -1,4 +1,5 @@
 from src.models.MAE import MAE_3D_Lightning
+from src.models.resnet_3d import Resnet3D
 from src.dataset import ForamsDataset
 from src.utils import *
 
@@ -13,7 +14,8 @@ import sys
 if not os.path.exists(TRAINED_MODELS_DIR):
     os.makedirs(TRAINED_MODELS_DIR)
     print(f"Created directory: {TRAINED_MODELS_DIR}")
-    
+
+DATA_PATH = "/zhome/a2/c/213547/group_Anhinga/forams_classification/data"
 
 TRAIN_SPLIT = 0.8
 NUM_SAMPLES = None
@@ -24,7 +26,7 @@ LEARNING_RATE = 1e-4
 BATCH_SIZE = 8
 
 
-def train(model_pl, train_dataloader, val_dataloader=None):
+def train(model_pl, train_dataloader, val_dataloader=None, model_name='network'):
 
     accelerator = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(f"accelerator: {accelerator}")
@@ -61,7 +63,7 @@ def train(model_pl, train_dataloader, val_dataloader=None):
 
     
     # Test the model
-    save_path = f"{TRAINED_MODELS_DIR}/mae02.pth"
+    save_path = f"{TRAINED_MODELS_DIR}/{model_name}.pth"
 
     # Save the model
     print(f"Saving the model to {save_path}")
@@ -107,7 +109,7 @@ if __name__ == "__main__":
         val_dataset, batch_size=BATCH_SIZE, shuffle=False)
 
     # Initialize the model
-    model_pl = MAE_3D_Lightning()
+    model_pl = Resnet3D(num_classes=2, pretrained=False, learning_rate=LEARNING_RATE)
 
 
-    train(model_pl, train_loader, val_loader)
+    train(model_pl, train_loader, val_loader, model_name='resnet_normal')
