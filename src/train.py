@@ -16,15 +16,15 @@ if not os.path.exists(TRAINED_MODELS_DIR):
     os.makedirs(TRAINED_MODELS_DIR)
     print(f"Created directory: {TRAINED_MODELS_DIR}")
 
-DATA_PATH = "/zhome/a2/c/213547/group_Anhinga/forams_classification/data"
+DATA_PATH = "/dtu/3d-imaging-center/courses/02510/data/Foraminifera/kaggle_data/"
 
 TRAIN_SPLIT = 0.8
 NUM_SAMPLES = 800
 NUM_EPOCHS = 100
-EARLY_STOPPING_PATIENCE = 6 # 90603e7b8caa45fca6a820844b7eb700a72aa61a
+EARLY_STOPPING_PATIENCE = 6
 
 LEARNING_RATE = 1e-4
-BATCH_SIZE = 2
+BATCH_SIZE = 8
 
 
 def train(model_pl, train_dataloader, val_dataloader=None, model_name='network'):
@@ -41,7 +41,8 @@ def train(model_pl, train_dataloader, val_dataloader=None, model_name='network')
     # Initialize wandb
     wandb_logger = WandbLogger(
         project="foramifiera-self-supervised",
-        name=f"resnet_3d_{wandb.util.generate_id()}",  # Create a unique run name
+        # Create a unique run name
+        name=f"{model_name}_{wandb.util.generate_id()}",
         log_model=True  # This will log your model checkpoints
     )
     # Optional: Log hyperparameters
@@ -51,72 +52,74 @@ def train(model_pl, train_dataloader, val_dataloader=None, model_name='network')
         'epochs': NUM_EPOCHS,
         'num_samples': NUM_SAMPLES,
     })
-    
+
     trainer = pl.Trainer(
         max_epochs=NUM_EPOCHS,
         callbacks=[early_stopping],
         accelerator=accelerator,
         logger=wandb_logger
     )
-    
+
     # Train the model
     trainer.fit(model_pl, train_dataloader, val_dataloader)
 
-    
-    # Test the model
-    save_path = f"{TRAINED_MODELS_DIR}/{model_name}.pth"
-
     # Save the model
+    save_path = f"{TRAINED_MODELS_DIR}/{model_name}.pth"
     print(f"Saving the model to {save_path}")
     torch.save(model_pl.model.state_dict(), save_path)
 
     # Finish the wandb run
     wandb.finish()
-    
+
     return model_pl
 
 
-
 if __name__ == "__main__":
-    
-    # Convert to tensor and add a channel dimension
-    volume_transforms = transforms.Compose([
+    # Basic transform for validation (no augmentation)
+    val_transforms = transforms.Compose([
         transforms.ToTensor(),
         transforms.Lambda(lambda x: x.unsqueeze(0)),  # Add a channel dimension
     ])
 
-    # Load the dataset
-    dataset = ForamsDataset(
-        csv_labels_path=os.path.join(DATA_PATH, "labelled.csv"), 
-        labelled_data_path=os.path.join(DATA_PATH, "volumes", "volumes", "labelled"),
-        # unlabeled_data_path=os.path.join(DATA_PATH, "volumes", "volumes", "unlabelled"),
-        volume_transforms=volume_transforms,
-        max_num_samples=NUM_SAMPLES
-    )
+    # Data augmentation + basic transforms for training
+    train_transforms = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Lambda(lambda x: x.unsqueeze(0)),  # Add a channel dimension
+        # transforms.RandomHorizontalFlip(p=0.5),  ### EDIT HERE
+        # transforms.RandomRotation(degrees=15),
+    ])
 
-    # Split into train, validation and test sets
-    train_size = int(TRAIN_SPLIT * len(dataset))
-    val_size = len(dataset) - train_size
-    train_dataset, val_dataset = torch.utils.data.random_split(
-        dataset, [train_size, val_size]
-    )
+    # Full dataset loading (shared data)
+    full_dataset = ForamsDataset(csv_labels_path=os.path.join(DATA_PATH, "labelled.csv"),
+                                 labelled_data_path=os.path.join(
+                                     DATA_PATH, "volumes", "labelled"),
+                                 max_num_samples=NUM_SAMPLES)
+
+    # Split indices for reproducibility
+    train_size = int(TRAIN_SPLIT * len(full_dataset))
+    val_size = len(full_dataset) - train_size
+    train_indices, val_indices = torch.utils.data.random_split(
+        range(len(full_dataset)), [train_size, val_size])
+
+    # Create subsets with different transforms
+    train_dataset = torch.utils.data.Subset(full_dataset, train_indices)
+    train_dataset.dataset.volume_transforms = train_transforms
+
+    val_dataset = torch.utils.data.Subset(full_dataset, val_indices)
+    val_dataset.dataset.volume_transforms = val_transforms
+
     print(f"Train size: {len(train_dataset)}")
     print(f"Validation size: {len(val_dataset)}")
 
-    # Use the sampler only for the training loader
-    train_loader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=BATCH_SIZE)
-    val_loader = torch.utils.data.DataLoader(
-        val_dataset, batch_size=BATCH_SIZE, shuffle=False)
+    # Use the sampler (shuffle) only for the training loader
+    train_loader = torch.utils.data.DataLoader(train_dataset,
+                                               batch_size=BATCH_SIZE)
+    val_loader = torch.utils.data.DataLoader(val_dataset,
+                                             batch_size=BATCH_SIZE,
+                                             shuffle=False)
 
-    # Initialize the model
-    model_pl = Resnet3D(num_classes=14, pretrained=False, learning_rate=LEARNING_RATE)
-
-    # all_labels = [label for _, label, _ in train_dataset]
-    # print("Unique labels in training set:", set(all_labels))
-    # print(f"Min label: {min(all_labels)}, Max label: {max(all_labels)}")
-    # print(f"Number of classes expected by model: {model_pl.num_classes}")
-
-    # exit(1)
+    model_pl = Resnet3D(num_classes=14,
+                        pretrained=False,
+                        learning_rate=LEARNING_RATE)
 
     train(model_pl, train_loader, val_loader, model_name='resnet_normal')

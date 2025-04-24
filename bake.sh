@@ -29,5 +29,6 @@
 
 ### --------------- Load environment and run Python script ---------------
 source /zhome/a2/c/213547/DLCV/adlcv-ex-1/venv/bin/activate
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export WANDB_API_KEY=90603e7b8caa45fca6a820844b7eb700a72aa61a
 python3 -m src.train
