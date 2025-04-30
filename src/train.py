@@ -11,6 +11,7 @@ import wandb
 from pytorch_lightning.loggers import WandbLogger
 import sys
 
+TRAINED_MODELS_DIR = "trained_models/"
 if not os.path.exists(TRAINED_MODELS_DIR):
     os.makedirs(TRAINED_MODELS_DIR)
     print(f"Created directory: {TRAINED_MODELS_DIR}")
