@@ -9,15 +9,12 @@ import wandb
 from pytorch_lightning.loggers import WandbLogger
 from torch.utils.data import Subset
 
-#DATA_PATH = "/zhome/a2/c/213547/group_Anhinga/forams_classification/data"
-
-DATA_PATH = "C:/Users/benja/OneDrive/Documents/Etudes/Masters/DTU/Spring_2025/DL_for_Experimental_3D_Image_Analysis/Project/forams-classification-2025"
-
-
 TRAINED_MODELS_DIR = f"{DATA_PATH}/trained_models/"
 if not os.path.exists(TRAINED_MODELS_DIR):
     os.makedirs(TRAINED_MODELS_DIR)
     print(f"Created directory: {TRAINED_MODELS_DIR}")
+
+DATA_PATH = "/zhome/a2/c/213547/group_Anhinga/forams_classification/data"
 
 TRAIN_SPLIT = 0.8
 NUM_SAMPLES = 800
