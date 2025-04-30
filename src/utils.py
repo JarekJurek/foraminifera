@@ -173,3 +173,49 @@ def load_checkpoint(model_class, checkpoint_path, device):
     model.eval()                # inference mode
     model.to(device)            # move to GPU if you like
     return model
+
+# Classes for data augmentation 3D
+class RandomFlip3D:
+    def __call__(self, volume):
+        if random.random() > 0.5:
+            volume = np.flip(volume, axis=0)  # flip along depth
+        if random.random() > 0.5:
+            volume = np.flip(volume, axis=1)  # flip along height
+        if random.random() > 0.5:
+            volume = np.flip(volume, axis=2)  # flip along width
+        return np.ascontiguousarray(volume)
+
+
+class RandomRotation3D:
+    def __call__(self, volume):
+        axes = [(0, 1), (1, 2), (0, 2)]
+        for ax in axes:
+            if random.random() > 0.5:
+                angle = random.uniform(-20, 20)
+                volume = ndi.rotate(volume, angle, axes=ax, reshape=False, order=1, mode='nearest')
+        return volume
+
+
+class RandomGaussianNoise:
+    def __call__(self, volume):
+        noise = np.random.normal(0, 0.01, size=volume.shape)
+        return volume + noise
+
+
+class RandomElasticDeformation:
+    def __call__(self, volume, alpha=15, sigma=3):
+        shape = volume.shape
+        dx = ndi.gaussian_filter((np.random.rand(*shape) * 2 - 1), sigma) * alpha
+        dy = ndi.gaussian_filter((np.random.rand(*shape) * 2 - 1), sigma) * alpha
+        dz = ndi.gaussian_filter((np.random.rand(*shape) * 2 - 1), sigma) * alpha
+
+        x, y, z = np.meshgrid(np.arange(shape[1]), np.arange(shape[0]), np.arange(shape[2]), indexing='ij')
+        indices = np.reshape(y + dy, (-1,)), np.reshape(x + dx, (-1,)), np.reshape(z + dz, (-1,))
+        distorted = ndi.map_coordinates(volume, indices, order=1, mode='reflect').reshape(shape)
+        return distorted
+
+
+class ToTensorAndChannelFirst:
+    def __call__(self, volume):
+        volume = torch.from_numpy(volume.astype(np.float32)).unsqueeze(0)  # Add channel dim
+        return volume
