@@ -148,6 +148,53 @@ class ForamsDataset:
             plt.show()
     
 
+class Forams2DStackedDataset(Dataset):
+    def __init__(self, csv_labels_path, labelled_data_path, slice_transforms=None, max_num_samples=None):
+        self.labelled_data_path = labelled_data_path
+        self.slice_transforms = slice_transforms
+        self.max_num_samples = max_num_samples
+
+        self.volume_paths = []
+        self.labels = []
+
+        labels_df = pd.read_csv(csv_labels_path)
+
+        for volume_filename in tqdm(os.listdir(labelled_data_path), desc="Indexing volumes"):
+            volume_path = os.path.join(labelled_data_path, volume_filename)
+
+            # Get volume ID and corresponding label
+            volume_id = volume_filename.split('_')[2]
+            label = labels_df[labels_df['id'].apply(lambda x: x.split('_')[1]) == volume_id]['label'].values[0]
+
+            self.volume_paths.append(volume_path)
+            self.labels.append(label)
+
+            if self.max_num_samples and len(self.volume_paths) >= self.max_num_samples:
+                break
+
+    def __len__(self):
+        return len(self.volume_paths)
+
+    def __getitem__(self, idx):
+        volume = imread(self.volume_paths[idx]).astype(np.float32) / 255.0
+        label = self.labels[idx]
+
+        # Get central slice along each axis
+        z_idx, y_idx, x_idx = [dim // 2 for dim in volume.shape]
+        slice_z = volume[z_idx, :, :]
+        slice_y = volume[:, y_idx, :]
+        slice_x = volume[:, :, x_idx]
+
+        # Stack into (C=3, H, W)
+        stacked_slices = np.stack([slice_z, slice_y, slice_x], axis=0)  # shape [3, H, W]
+
+        if self.slice_transforms:
+            stacked_slices = self.slice_transforms(torch.tensor(stacked_slices))
+
+        return stacked_slices.float(), torch.tensor(label, dtype=torch.long)
+
+    
+
 if __name__ == "__main__":
     pass
             
