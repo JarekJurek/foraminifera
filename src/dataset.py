@@ -5,6 +5,9 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 import numpy as np
 import torch
+from torchvision import transforms
+from torch.utils.data import Dataset
+from skimage.io import imread
 
 
 class ForamsDataset:
