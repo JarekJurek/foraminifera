@@ -78,10 +78,18 @@ def train(model_pl, train_dataloader, val_dataloader=None, model_name='network')
 
 if __name__ == "__main__":
     
-    # Convert to tensor and add a channel dimension
-    volume_transforms = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Lambda(lambda x: x.unsqueeze(0)),  # Add a channel dimension
+    # Augmentations for training only
+    train_transforms = T.Compose([
+        RandomFlip3D(),
+        RandomRotation3D(),
+        RandomGaussianNoise(),
+        # RandomElasticDeformation(),  # Optional: slower, comment in if needed
+        ToTensorAndChannelFirst()
+    ])
+
+    # Simple transforms for validation
+    val_transforms = T.Compose([
+        ToTensorAndChannelFirst()
     ])
 
     # Load the dataset
@@ -89,9 +97,14 @@ if __name__ == "__main__":
         csv_labels_path=os.path.join(DATA_PATH, "labelled.csv"), 
         labelled_data_path=os.path.join(DATA_PATH, "volumes", "volumes", "labelled"),
         unlabeled_data_path=os.path.join(DATA_PATH, "volumes", "volumes", "unlabelled"),
-        volume_transforms=volume_transforms,
+        volume_transforms=None,
         max_num_samples=NUM_SAMPLES
     )
+
+    # # Split into train and val
+    # train_size = int(TRAIN_SPLIT * len(full_dataset))
+    # val_size = len(full_dataset) - train_size
+    # train_indices, val_indices = torch.utils.data.random_split(range(len(full_dataset)), [train_size, val_size])
 
     # Split into train, validation and test sets
     train_size = int(TRAIN_SPLIT * len(dataset))
@@ -102,9 +115,18 @@ if __name__ == "__main__":
     print(f"Train size: {len(train_dataset)}")
     print(f"Validation size: {len(val_dataset)}")
 
+    # Split while keeping reference to full dataset
+    train_dataset, val_dataset = torch.utils.data.random_split(
+        dataset, [train_size, val_size]
+    )
+
+    # Manually assign transforms — safe because both subsets share the same dataset
+    train_dataset.dataset.volume_transforms = train_transforms
+    val_dataset.dataset.volume_transforms = val_transforms
+
     # Use the sampler only for the training loader
     train_loader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=BATCH_SIZE)
+        train_dataset, batch_size=BATCH_SIZE, shuffle=True)
     val_loader = torch.utils.data.DataLoader(
         val_dataset, batch_size=BATCH_SIZE, shuffle=False)
 
