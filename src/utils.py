@@ -1,7 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
-import os
+import torch
+import scipy.ndimage as ndi
+import random
 
 
 TRAINED_MODELS_PATH = "/dtu/3d-imaging-center/courses/02510/groups/group_Anhinga/forams_classification/trained_models/"
