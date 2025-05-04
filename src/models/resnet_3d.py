@@ -7,11 +7,17 @@ import torch.nn.functional as F
 
 class Resnet3D(pl.LightningModule):
 
-    def __init__(self, num_classes, pretrained=True, learning_rate=1e-4):
+    def __init__(self, num_classes, pretrained=True, learning_rate=1e-4, class_weights=None):
         super().__init__()
         
         self.num_classes = num_classes
         self.model = r3d_18(pretrained=pretrained)
+        self.model.stem[0] = torch.nn.Conv3d(in_channels=1,
+                                             out_channels=64,
+                                             kernel_size=(3, 7, 7),
+                                             stride=(1, 2, 2),
+                                             padding=(1, 3, 3),
+                                             bias=False)
         # Add dropout layer
         self.model.fc = torch.nn.Sequential(
             torch.nn.Dropout(0.5),
@@ -19,7 +25,7 @@ class Resnet3D(pl.LightningModule):
         )
 
         # Use focal loss for imbalanced classes
-        self.criterion = torch.nn.CrossEntropyLoss()
+        self.criterion = torch.nn.CrossEntropyLoss(weight=class_weights)
         self.learning_rate = learning_rate
 
 
@@ -35,7 +41,7 @@ class Resnet3D(pl.LightningModule):
             f'{type}_accuracy': torchmetrics.functional.accuracy(preds, targets, task='multiclass', average='macro', num_classes=self.num_classes),
             f'{type}_precision': torchmetrics.functional.precision(preds, targets, task='multiclass', average='macro', num_classes=self.num_classes),
             f'{type}_recall': torchmetrics.functional.recall(preds, targets, task='multiclass', average='macro', num_classes=self.num_classes),
-            f'{type}_f1': torchmetrics.functional.f1(preds, targets, task='multiclass', average='macro', num_classes=self.num_classes),
+            f'{type}_f1': torchmetrics.functional.f1_score(preds, targets, task='multiclass', average='macro', num_classes=self.num_classes),
         }
         # Log the metrics
         self.log_dict(

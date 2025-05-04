@@ -10,140 +10,109 @@ from torch.utils.data import Dataset
 from skimage.io import imread
 
 
-class ForamsDataset:
-    
+class ForamsDataset(Dataset):
+
     def __init__(self, 
-                csv_labels_path=None, 
-                labelled_data_path=None, unlabeled_data_path=None, 
-                volume_transforms=None,
-                max_num_samples=None):
+                 csv_labels_path=None, 
+                 labelled_data_path=None, 
+                 unlabeled_data_path=None, 
+                 volume_transforms=None,
+                 max_num_samples=None):
         
         self.volume_transforms = volume_transforms
         self.max_num_samples = max_num_samples
-        
         self.data = []
+
         if csv_labels_path and labelled_data_path:
             self.load_labelled_data(csv_labels_path, labelled_data_path)
         if unlabeled_data_path:
             self.load_unlabelled_data(unlabeled_data_path)
-    
+
+        print(f"[INFO] Loaded {len(self.data)} total samples.")
+
+    def _reached_sample_limit(self):
+        return self.max_num_samples and len(self.data) >= self.max_num_samples
+
     def load_labelled_data(self, csv_labels_path, labelled_data_path):
-        """
-        Load labelled data from a CSV file and a directory of images.
-        The CSV file should contain the following columns:
-        - id: the id of the volume
-        - label: the label of the volume
-        :param csv_labels_path: path to the CSV file
-        :param labelled_data_path: path to the directory of images
-        :return: None
-        """
-        
-        # Read the CSV file
         labels_df = pd.read_csv(csv_labels_path)
-        
-        # Load the images
+
         for volume_filename in tqdm(os.listdir(labelled_data_path), desc='Loading labelled data'):
+            if self._reached_sample_limit():
+                break
+
             volume_path = os.path.join(labelled_data_path, volume_filename)
-            # Read the volume
             volume = imread(volume_path)
-            
+
             volume_id = volume_filename.split('_')[2]
-            # Get the labels for the volume
             volume_labels = labels_df[labels_df['id'].apply(lambda x: x.split('_')[1]) == volume_id]
-            # Get the labels for the volume
+            if volume_labels.empty:
+                continue
+
             label = volume_labels['label'].values[0]
-            
             self.data.append({
                 'volume': volume,
                 'label': label
             })
-            if self.max_num_samples and len(self.data) >= self.max_num_samples:
-                break
-            
+
     def load_unlabelled_data(self, unlabeled_data_path):
-        """
-        Load unlabelled data from a directory of images.
-        :param unlabeled_data_path: path to the directory of images
-        :return: None
-        """
-        # Load the images
         for volume_filename in tqdm(os.listdir(unlabeled_data_path), desc='Loading unlabelled data'):
+            if self._reached_sample_limit():
+                break
+
             volume_path = os.path.join(unlabeled_data_path, volume_filename)
-            # Read the volume
             volume = imread(volume_path)
-            
+
             self.data.append({
                 'volume': volume,
                 'label': -1
             })
-            if self.max_num_samples and len(self.data) >= self.max_num_samples:
-                break
-    
+
     def __len__(self):
-        """
-        Return the number of labelled images.
-        """
         return len(self.data)
-    
+
     def __getitem__(self, idx):
-        """
-        Return the labelled image and its label.
-        """
         volume = self.data[idx]['volume']
+
+        if volume.ndim == 4 and volume.shape[0] == 2:
+            print(f"[FIXED] Volume at idx={idx} has 2 channels, taking only the first one")
+            volume = volume[0]
+
         volume = volume.astype(np.float32) / 255.0
-        label = self.data[idx]['label']
-        
-        # Apply the transformations to the volume
         if self.volume_transforms:
             volume = self.volume_transforms(volume)
-        
-        # Convert the label to a tensor
-        label = torch.tensor(label, dtype=torch.long)
-        
-        return volume, label
-    
-    
+
+        volume = torch.tensor(volume).unsqueeze(0)  # Add channel dimension: [1, D, H, W]
+        label = torch.tensor(self.data[idx]['label'], dtype=torch.long)
+
+        return volume, label, idx
+
     def plot_sample_slices(self, idx, idx_x=None, idx_y=None, idx_z=None, cmap='gray', save_path=None):
-        """
-        Plot the slices of the volume at the given indices.
-        :param idx: index of the volume
-        :param idx_x: index of the x slice
-        :param idx_y: index of the y slice
-        :param idx_z: index of the z slice
-        :param cmap: colormap to use
-        :param save_path: path to save the plot
-        :return: None
-        """
-         
         volume, label = self[idx]
-        
+
         if idx_x is None:
-            idx_x = volume.shape[2] // 2
+            idx_x = volume.shape[3] // 2
         if idx_y is None:
-            idx_y = volume.shape[1] // 2
+            idx_y = volume.shape[2] // 2
         if idx_z is None:
-            idx_z = volume.shape[0] // 2
-            
+            idx_z = volume.shape[1] // 2
+
         fig, axes = plt.subplots(1, 3, figsize=(10, 5))
-        
-        if idx_x is not None:
-            axes[0].imshow(volume[:, :, idx_x], cmap=cmap)
-            axes[0].set_title(f'Slice at X={idx_x}')
-            axes[0].axis('off')
-            
-        if idx_y is not None:
-            axes[1].imshow(volume[:, idx_y, :], cmap=cmap)
-            axes[1].set_title(f'Slice at Y={idx_y}')
-            axes[1].axis('off')
-            
-        if idx_z is not None:
-            axes[2].imshow(volume[idx_z, :, :], cmap=cmap)
-            axes[2].set_title(f'Slice at Z={idx_z}')
-            axes[2].axis('off')
-        
+
+        axes[0].imshow(volume[0, :, :, idx_x], cmap=cmap)
+        axes[0].set_title(f'Slice at X={idx_x}')
+        axes[0].axis('off')
+
+        axes[1].imshow(volume[0, :, idx_y, :], cmap=cmap)
+        axes[1].set_title(f'Slice at Y={idx_y}')
+        axes[1].axis('off')
+
+        axes[2].imshow(volume[0, idx_z, :, :], cmap=cmap)
+        axes[2].set_title(f'Slice at Z={idx_z}')
+        axes[2].axis('off')
+
         plt.suptitle(f'Label: {label}')
         plt.tight_layout()
-        
+
         if save_path:
             plt.savefig(save_path)
             plt.close(fig)

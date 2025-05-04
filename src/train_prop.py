@@ -1,6 +1,6 @@
 from src.models.MAE import MAE_3D_Lightning
 from src.models.resnet_3d import Resnet3D
-from src.dataset import ForamsDataset
+from src.dataset_prop import ForamsDatasetProp
 from src.utils import *
 
 import torchvision.transforms as transforms
@@ -9,7 +9,8 @@ import torch
 import os
 import wandb
 from pytorch_lightning.loggers import WandbLogger
-import sys
+from sklearn.utils.class_weight import compute_class_weight
+
 
 TRAINED_MODELS_DIR = "trained_models/"
 if not os.path.exists(TRAINED_MODELS_DIR):
@@ -20,8 +21,8 @@ DATA_PATH = "/dtu/3d-imaging-center/courses/02510/data/Foraminifera/kaggle_data/
 
 TRAIN_SPLIT = 0.8
 NUM_SAMPLES = None
-NUM_EPOCHS = 100
-EARLY_STOPPING_PATIENCE = 15
+NUM_EPOCHS = 30
+EARLY_STOPPING_PATIENCE = 8
 
 LEARNING_RATE = 1e-4
 BATCH_SIZE = 8
@@ -61,7 +62,6 @@ def train(model_pl, train_dataloader, val_dataloader=None, model_name='network')
     
     # Train the model
     trainer.fit(model_pl, train_dataloader, val_dataloader)
-
     
     save_path = f"{TRAINED_MODELS_DIR}/{model_name}.pth"
 
@@ -73,7 +73,6 @@ def train(model_pl, train_dataloader, val_dataloader=None, model_name='network')
     wandb.finish()
     
     return model_pl
-
 
 
 if __name__ == "__main__":
@@ -90,9 +89,11 @@ if __name__ == "__main__":
         ToTensorAndChannelFirst()
     ])
 
-    dataset = ForamsDataset(
-        csv_labels_path=os.path.join(DATA_PATH, "labelled.csv"), 
+    dataset = ForamsDatasetProp(
+        true_labels_csv=os.path.join(DATA_PATH, "labelled.csv"), 
+        prop_labels_csv="/zhome/a2/c/213547/group_Anhinga/foraminifera/new_labells_raw.csv", 
         labelled_data_path=os.path.join(DATA_PATH, "volumes", "labelled"),
+        unlabelled_data_path=os.path.join(DATA_PATH, "volumes", "unlabelled"),
         volume_transforms=None,
         max_num_samples=NUM_SAMPLES
     )
@@ -112,6 +113,13 @@ if __name__ == "__main__":
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
     val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False)
 
-    model_pl = Resnet3D(num_classes=15, pretrained=False, learning_rate=LEARNING_RATE)
+    # Compute class weights from the training labels
+    train_labels = [train_dataset[i][1].item() for i in range(len(train_dataset))]
+    unique_classes = np.unique(train_labels)
+    class_weights_array = compute_class_weight(class_weight='balanced', classes=unique_classes, y=train_labels)
+    class_weights = torch.ones(15, dtype=torch.float)  # Default weights = 1.0
+    class_weights[unique_classes] = torch.tensor(class_weights_array, dtype=torch.float)
 
-    train(model_pl, train_loader, val_loader, model_name='3D_aug_true')
+    model_pl = Resnet3D(num_classes=15, pretrained=True, learning_rate=LEARNING_RATE, class_weights=class_weights)
+
+    train(model_pl, train_loader, val_loader, model_name='3D_prop_2')
